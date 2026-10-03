@@ -1,0 +1,36 @@
+version: 2.1
+
+jobs:
+  backend-check:
+    docker:
+      - image: cimg/python:3.12
+    working_directory: ~/project/backend
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Install backend dependencies
+          command: pip install -r requirements.txt
+      - run:
+          name: Check Python syntax
+          command: python -m compileall -q app
+
+  frontend-build:
+    docker:
+      - image: cimg/node:22.13
+    working_directory: ~/project/frontend
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Install frontend dependencies
+          command: npm install
+      - run:
+          name: Build frontend
+          command: npm run build
+
+workflows:
+  validate:
+    jobs:
+      - backend-check
+      - frontend-build
