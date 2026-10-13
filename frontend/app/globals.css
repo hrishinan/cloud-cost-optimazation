@@ -40,3 +40,44 @@ h3 { font-size: 17px; margin: 24px 0 12px; }
 .service-cost-row strong { white-space: nowrap; }
 .security-note { color: #697386; font-size: 12px; line-height: 1.5; margin-top: 16px; }
 @media (max-width: 600px) { .setup-card { padding: 28px 20px; } .service-cost-row { align-items: flex-start; font-size: 12px; padding: 12px; } }
+
+h2 { font-size: 26px; margin: 0 0 8px; }
+h3 { font-size: 17px; margin: 24px 0 12px; }
+.connection-message { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.error-message { color: #a12622; }
+.cost-dashboard { margin-top: 28px; padding-top: 28px; border-top: 1px solid #e4e7ec; }
+.cost-dashboard .subtitle { font-size: 13px; margin: 0 0 18px; overflow-wrap: anywhere; }
+.cost-total { display: grid; gap: 8px; padding: 22px; border: 1px solid #e4e7ec; border-radius: 14px; background: #f8fafc; }
+.cost-total small { color: #697386; font-size: 12px; }
+.cost-total strong { font-size: clamp(28px, 5vw, 38px); overflow-wrap: anywhere; }
+.daily-chart { height: 190px; display: flex; align-items: stretch; gap: 4px; padding: 12px 8px 0; border-bottom: 1px solid #d9dde5; overflow-x: auto; }
+.daily-chart-item { flex: 1; min-width: 12px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
+.daily-bar { display: block; width: min(100%, 22px); min-height: 3px; background: #5279b9; border-radius: 4px 4px 0 0; }
+.daily-chart-item small { color: #697386; font-size: 10px; }
+.service-chart { display: grid; gap: 14px; }
+.service-chart-row { display: grid; gap: 6px; }
+.service-chart-label { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.service-chart-label span { overflow-wrap: anywhere; }
+.service-chart-label strong { white-space: nowrap; }
+.bar-track { height: 8px; background: #edf0f3; border-radius: 99px; overflow: hidden; }
+.service-bar { height: 100%; background: #5279b9; border-radius: 99px; }
+.finding-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.finding-summary > div { display: grid; gap: 6px; padding: 18px; border: 1px solid #e4e7ec; border-radius: 12px; }
+.finding-summary strong { font-size: 26px; }
+.finding-summary small { color: #697386; }
+.findings-list { display: grid; gap: 12px; margin-top: 16px; }
+.finding { padding: 18px; border: 1px solid #e4e7ec; border-radius: 12px; }
+.finding-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.finding-service { color: #5d6678; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.risk { font-size: 11px; border-radius: 99px; padding: 4px 8px; background: #edf0f3; text-transform: capitalize; }
+.risk-low { color: #285b42; background: #eaf5ee; }
+.risk-medium { color: #875b13; background: #fff4d8; }
+.finding h3 { margin: 12px 0 8px; }
+.finding p { font-size: 13px; line-height: 1.55; color: #4b5565; }
+.finding small { color: #697386; }
+.service-cost-list { display: grid; gap: 0; border: 1px solid #e4e7ec; border-radius: 12px; overflow: hidden; }
+.service-cost-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid #e4e7ec; font-size: 14px; }
+.service-cost-row:last-child { border-bottom: 0; }
+.service-cost-row span { overflow-wrap: anywhere; }
+.service-cost-row strong { white-space: nowrap; text-transform: capitalize; }
+@media (max-width: 600px) { .setup-card { padding: 28px 20px; } .service-cost-row { align-items: flex-start; font-size: 12px; padding: 12px; } .service-chart-label { font-size: 12px; } }
