@@ -16,7 +16,7 @@ type CostData = {
 };
 type ScanData = { findings: Finding[]; scan_status: { service: string; status: string; message?: string }[]; supported_checks: string[]; note: string };
 
-const API = "http://localhost:8000/api";
+const API = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api`;
 
 export default function Home() {
   const [provider, setProvider] = useState<Provider | null>(null);
