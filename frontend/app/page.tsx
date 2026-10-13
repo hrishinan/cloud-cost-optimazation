@@ -14,7 +14,7 @@ type CostData = {
   total: number; currency: string; services: ServiceCost[];
   daily: DailyCost[]; source: string; note: string;
 };
-type ScanData = { findings: Finding[]; scan_status: { service: string; status: string; message?: string }[]; supported_checks: string[]; note: string };
+type ScanData = { findings: Finding[]; scan_status: { service: string; status: string; message?: string; zones?: number }[]; supported_checks: string[]; note: string };
 
 const API = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api`;
 
@@ -30,6 +30,8 @@ export default function Home() {
   const [costs, setCosts] = useState<CostData | null>(null);
   const [scan, setScan] = useState<ScanData | null>(null);
   const [costError, setCostError] = useState("");
+  const [gcpProjectId, setGcpProjectId] = useState("");
+  const [gcpBillingTable, setGcpBillingTable] = useState("");
 
   async function connectAWS() {
     setLoading(true);
@@ -60,6 +62,37 @@ export default function Home() {
       else setCostError((old) => [old, scanData.detail || "Could not scan AWS resources."].filter(Boolean).join(" "));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "AWS connection failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function connectGCP() {
+    setLoading(true);
+    setMessage("");
+    setCostError("");
+    setCosts(null);
+    setScan(null);
+    try {
+      const payload = { project_id: gcpProjectId.trim(), billing_export_table: gcpBillingTable.trim() || null };
+      const connectResponse = await fetch(`${API}/cloud/gcp/connect`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const connectData = await connectResponse.json();
+      if (!connectResponse.ok) throw new Error(connectData.detail || "GCP connection failed");
+      setMessage(`Connected successfully. GCP Project: ${connectData.project_id}`);
+      const [costResponse, scanResponse] = await Promise.all([
+        fetch(`${API}/cloud/gcp/costs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+        fetch(`${API}/cloud/gcp/recommendations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+      ]);
+      const costData = await costResponse.json();
+      const scanData = await scanResponse.json();
+      if (costResponse.ok) setCosts(costData as CostData);
+      else setCostError(costData.detail || "Could not load GCP billing data.");
+      if (scanResponse.ok) setScan(scanData as ScanData);
+      else setCostError((old) => [old, scanData.detail || "Could not scan GCP resources."].filter(Boolean).join(" "));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "GCP connection failed");
     } finally {
       setLoading(false);
     }
@@ -174,7 +207,31 @@ export default function Home() {
                 )}
               </>
             )}
-            {provider === "GCP" && <><div className="form"><label>Project ID<input placeholder="Enter GCP Project ID" /></label><label>Service Account Email<input placeholder="service-account@project.iam.gserviceaccount.com" /></label><label>Private Key<textarea placeholder="Paste service account private key" rows={5} /></label></div><button className="primary-button" disabled>Connect GCP (coming soon)</button></>}
+            {provider === "GCP" && <>
+              <div className="form">
+                <label>GCP Project ID<input value={gcpProjectId} onChange={(e) => setGcpProjectId(e.target.value)} placeholder="my-gcp-project-id" /></label>
+                <label>BigQuery Billing Export Table ID (optional for inventory)<input value={gcpBillingTable} onChange={(e) => setGcpBillingTable(e.target.value)} placeholder="billing-project.dataset.gcp_billing_export_v1_XXXXXX" /></label>
+              </div>
+              <p className="security-note">Authentication uses Application Default Credentials on the backend VM. Do not paste service-account private keys into this page. Configure a dedicated read-only service account on the VM.</p>
+              <button className="primary-button" disabled={loading || gcpProjectId.trim().length < 3} onClick={connectGCP}>{loading ? "Exploring GCP project..." : "Connect and analyze GCP"}</button>
+              {message && <p className="connection-message">{message}</p>}
+              {costError && <p className="connection-message error-message">{costError}</p>}
+              {costs && <section className="cost-dashboard" aria-live="polite">
+                <h2>GCP Cost Overview</h2>
+                <p className="subtitle">Project {gcpProjectId} · Month to date · {costs.source}</p>
+                <div className="cost-total"><small>Total month-to-date spend</small><strong>{money(costs.total, costs.currency)}</strong><small>{costs.period.start} through today. Billing data can be delayed.</small></div>
+                <h3>Daily spend trend</h3>
+                {costs.daily.length ? <div className="daily-chart" role="img" aria-label="Daily GCP spend bar chart">{costs.daily.map((item) => <div className="daily-chart-item" key={item.date} title={`${item.date}: ${money(item.amount, costs.currency)}`}><span className="daily-bar" style={{ height: `${Math.max(3, item.amount / Math.max(1, ...costs.daily.map((d) => d.amount)) * 100)}%` }} /><small>{item.date.slice(-2)}</small></div>)}</div> : <p>No daily spend data returned.</p>}
+                <h3>Cost by GCP service</h3>
+                {costs.services.length ? <div className="service-chart">{costs.services.map((item) => <div className="service-chart-row" key={item.service}><div className="service-chart-label"><span>{item.service}</span><strong>{money(item.amount, item.currency)}</strong></div><div className="bar-track"><div className="service-bar" style={{ width: `${Math.max(1, Math.abs(item.amount) / Math.max(1, ...costs.services.map((s) => Math.abs(s.amount))) * 100)}%` }} /></div></div>)}</div> : <p>Billing export may not be configured or may not contain data yet.</p>}
+                <p className="security-note">{costs.note}</p>
+              </section>}
+              {scan && <section className="cost-dashboard"><h2>GCP Optimization Findings</h2><p className="subtitle">Project {gcpProjectId}</p>
+                <div className="finding-summary"><div><strong>{scan.findings.length}</strong><small>Resources to review</small></div><div><strong>{scan.scan_status.filter((x) => x.status === "scanned").length}</strong><small>Checks completed</small></div></div>
+                {scan.findings.length ? <div className="findings-list">{scan.findings.map((finding) => <article className="finding" key={`${finding.service}-${finding.id}`}><div className="finding-heading"><span className="finding-service">{finding.service}</span><span className={`risk risk-${finding.risk}`}>{finding.risk} risk</span></div><h3>{finding.title}</h3><p>{finding.detail}</p><p><strong>Suggested action:</strong> {finding.action}</p><small>Saving estimate not yet calculated.</small></article>)}</div> : <p>No running Compute Engine VMs were returned by the current check.</p>}
+                <p className="security-note">{scan.note}</p>
+              </section>}
+            </>}
             {provider === "Azure" && <><div className="form"><label>Tenant ID<input placeholder="Enter Tenant ID" /></label><label>Client ID<input placeholder="Enter Client ID" /></label><label>Client Secret<input type="password" placeholder="Enter Client Secret" /></label><label>Subscription ID<input placeholder="Enter Subscription ID" /></label></div><button className="primary-button" disabled>Connect Azure (coming soon)</button></>}
             <p className="security-note">Credentials are used for these requests and are not persisted by this API. Never commit cloud credentials to Git. Use a dedicated read-only IAM role/identity for account analysis.</p>
           </>
