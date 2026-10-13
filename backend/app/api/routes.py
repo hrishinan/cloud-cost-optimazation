@@ -208,3 +208,117 @@ def aws_recommendations(request: AWSConnectionRequest):
 @router.get("/recommendations")
 def recommendations():
     return {"items": generate_demo_recommendations(), "currency": "INR", "demo": True}
+
+
+class GCPConnectionRequest(BaseModel):
+    project_id: str = Field(min_length=3)
+    billing_export_table: str | None = None
+
+
+def gcp_adc_credentials():
+    import google.auth
+    credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    return credentials
+
+
+@router.post("/cloud/gcp/connect")
+def connect_gcp(request: GCPConnectionRequest):
+    try:
+        from google.auth.transport.requests import Request
+        credentials = gcp_adc_credentials()
+        credentials.refresh(Request())
+        return {
+            "connected": True,
+            "provider": "GCP",
+            "project_id": request.project_id,
+            "auth_method": "Application Default Credentials (ADC)",
+            "billing_export_configured": bool(request.billing_export_table),
+            "note": "Authentication succeeded. The VM's attached service account or ADC identity must have read-only access to this project.",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="GCP authentication failed. Configure Application Default Credentials on the VM and grant the attached service account read-only access.") from exc
+
+
+@router.post("/cloud/gcp/costs")
+def gcp_costs(request: GCPConnectionRequest):
+    if not request.billing_export_table:
+        raise HTTPException(
+            status_code=400,
+            detail="Actual GCP costs require Cloud Billing export to BigQuery. Enter the fully qualified table ID: billing-project.dataset.gcp_billing_export_v1_BILLING_ACCOUNT_ID.",
+        )
+    parts = request.billing_export_table.split(".")
+    if len(parts) != 3 or not all(part.strip() for part in parts):
+        raise HTTPException(status_code=400, detail="Billing export table must be fully qualified: billing-project.dataset.table.")
+    try:
+        from google.cloud import bigquery
+        credentials = gcp_adc_credentials()
+        client = bigquery.Client(project=request.project_id, credentials=credentials)
+        table = "`" + request.billing_export_table + "`"
+        query = f"""
+        SELECT service.description AS service, currency,
+               ROUND(SUM(cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 2) AS amount
+        FROM {table}
+        WHERE DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+          AND DATE(usage_start_time) < DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY)
+        GROUP BY service, currency
+        ORDER BY amount DESC
+        """
+        services = [{"service": row.service or "Unknown", "amount": float(row.amount or 0), "currency": row.currency or "USD"} for row in client.query(query).result()]
+        daily_query = f"""
+        SELECT FORMAT_DATE('%Y-%m-%d', DATE(usage_start_time)) AS day,
+               ROUND(SUM(cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 2) AS amount
+        FROM {table}
+        WHERE DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)
+          AND DATE(usage_start_time) < DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY)
+        GROUP BY day ORDER BY day
+        """
+        daily = [{"date": row.day, "amount": float(row.amount or 0)} for row in client.query(daily_query).result()]
+        return {
+            "period": {"start": date.today().replace(day=1).isoformat(), "end_exclusive": (date.today() + timedelta(days=1)).isoformat()},
+            "total": round(sum(item["amount"] for item in services), 2),
+            "currency": services[0]["currency"] if services else "USD",
+            "services": services,
+            "daily": daily,
+            "source": "Google Cloud Billing export (BigQuery)",
+            "note": "Billing export can be delayed. Costs include exported credits and are not live metering.",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not query the BigQuery billing export. Verify the table ID and grant BigQuery Job User plus BigQuery Data Viewer permissions.") from exc
+
+
+@router.post("/cloud/gcp/recommendations")
+def gcp_recommendations(request: GCPConnectionRequest):
+    try:
+        from google.cloud import compute_v1
+        credentials = gcp_adc_credentials()
+        client = compute_v1.InstancesClient(credentials=credentials)
+        findings = []
+        zones_scanned = 0
+        for zone in client.aggregated_list(project=request.project_id, filter="status = RUNNING"):
+            instances = getattr(zone, "instances", None)
+            if not instances:
+                continue
+            zones_scanned += 1
+            for instance in instances:
+                machine_type = instance.machine_type.rsplit("/", 1)[-1] if instance.machine_type else "unknown"
+                findings.append({
+                    "id": instance.name,
+                    "service": "Compute Engine",
+                    "title": "Review VM utilization and machine type",
+                    "detail": f"Running VM in {zone.name}, machine type {machine_type}.",
+                    "action": "Review Cloud Monitoring CPU, memory (if agent installed), network, and workload schedule before rightsizing or stopping.",
+                    "risk": "medium",
+                    "estimated_monthly_saving": None,
+                })
+        return {
+            "findings": findings,
+            "scan_status": [{"service": "Compute Engine inventory", "status": "scanned", "zones": zones_scanned}],
+            "supported_checks": ["Running Compute Engine VM inventory"],
+            "note": "This is an initial inventory review, not a full GCP optimization scan. Savings are not estimated until utilization and pricing are analyzed.",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not scan Compute Engine. Verify compute.instances.list permission and the project ID.") from exc
