@@ -32,6 +32,7 @@ export default function Home() {
   const [costError, setCostError] = useState("");
   const [gcpProjectId, setGcpProjectId] = useState("");
   const [gcpBillingTable, setGcpBillingTable] = useState("");
+  const [gcpServiceAccountKey, setGcpServiceAccountKey] = useState("");
 
   async function connectAWS() {
     setLoading(true);
@@ -74,7 +75,7 @@ export default function Home() {
     setCosts(null);
     setScan(null);
     try {
-      const payload = { project_id: gcpProjectId.trim(), billing_export_table: gcpBillingTable.trim() || null };
+      const payload = { project_id: gcpProjectId.trim(), billing_export_table: gcpBillingTable.trim() || null, service_account_key: gcpServiceAccountKey.trim() || null };
       const connectResponse = await fetch(`${API}/cloud/gcp/connect`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
@@ -94,6 +95,7 @@ export default function Home() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "GCP connection failed");
     } finally {
+      setGcpServiceAccountKey("");
       setLoading(false);
     }
   }
@@ -211,8 +213,9 @@ export default function Home() {
               <div className="form">
                 <label>GCP Project ID<input value={gcpProjectId} onChange={(e) => setGcpProjectId(e.target.value)} placeholder="my-gcp-project-id" /></label>
                 <label>BigQuery Billing Export Table ID (optional for inventory)<input value={gcpBillingTable} onChange={(e) => setGcpBillingTable(e.target.value)} placeholder="billing-project.dataset.gcp_billing_export_v1_XXXXXX" /></label>
+                <label>Service Account JSON Key (optional)<textarea value={gcpServiceAccountKey} onChange={(e) => setGcpServiceAccountKey(e.target.value)} placeholder="Paste test service-account JSON key" rows={5} autoComplete="off" /></label>
               </div>
-              <p className="security-note">Authentication uses Application Default Credentials on the backend VM. Do not paste service-account private keys into this page. Configure a dedicated read-only service account on the VM.</p>
+              <p className="security-note">Testing only: this page uses HTTP, so a private key can be intercepted. Use only a temporary test-project key with least privilege; never use production credentials. Prefer VM Application Default Credentials and enable HTTPS before broader use. The key field is cleared after the request.</p>
               <button className="primary-button" disabled={loading || gcpProjectId.trim().length < 3} onClick={connectGCP}>{loading ? "Exploring GCP project..." : "Connect and analyze GCP"}</button>
               {message && <p className="connection-message">{message}</p>}
               {costError && <p className="connection-message error-message">{costError}</p>}
