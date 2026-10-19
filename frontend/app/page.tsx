@@ -75,7 +75,21 @@ export default function Home() {
     setCosts(null);
     setScan(null);
     try {
-      const payload = { project_id: gcpProjectId.trim(), billing_export_table: gcpBillingTable.trim() || null, service_account_key: gcpServiceAccountKey.trim() || null };
+      let serviceAccountKey: Record<string, unknown> | null = null;
+      const rawKey = gcpServiceAccountKey.trim();
+      if (rawKey) {
+        try {
+          const parsed: unknown = JSON.parse(rawKey);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
+              (parsed as Record<string, unknown>).type !== "service_account") {
+            throw new Error("Expected a Google Cloud service-account JSON object.");
+          }
+          serviceAccountKey = parsed as Record<string, unknown>;
+        } catch {
+          throw new Error("Invalid Service Account JSON. Paste the complete, unmodified JSON key file, including its braces and quoted property names.");
+        }
+      }
+      const payload = { project_id: gcpProjectId.trim(), billing_export_table: gcpBillingTable.trim() || null, service_account_key: serviceAccountKey };
       const connectResponse = await fetch(`${API}/cloud/gcp/connect`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
