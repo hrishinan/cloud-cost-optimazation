@@ -213,13 +213,28 @@ def recommendations():
 class GCPConnectionRequest(BaseModel):
     project_id: str = Field(min_length=3)
     billing_export_table: str | None = None
+    service_account_key: str | None = None
 
 
-def gcp_adc_credentials():
+def gcp_credentials(request: GCPConnectionRequest):
+    key = request.service_account_key
+    if key and key.strip():
+        import json
+        from google.oauth2 import service_account
+        try:
+            key_info = json.loads(key)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid service-account JSON.") from exc
+        if not isinstance(key_info, dict) or key_info.get("type") != "service_account":
+            raise HTTPException(status_code=400, detail="Expected a Google Cloud service-account JSON key.")
+        try:
+            return service_account.Credentials.from_service_account_info(
+                key_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(status_code=400, detail="The service-account JSON is incomplete or invalid.") from exc
     import google.auth
-    credentials, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
+    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
     return credentials
 
 
@@ -227,18 +242,18 @@ def gcp_adc_credentials():
 def connect_gcp(request: GCPConnectionRequest):
     try:
         from google.auth.transport.requests import Request
-        credentials = gcp_adc_credentials()
+        credentials = gcp_credentials(request)
         credentials.refresh(Request())
         return {
             "connected": True,
             "provider": "GCP",
             "project_id": request.project_id,
-            "auth_method": "Application Default Credentials (ADC)",
+            "auth_method": "Service account JSON key" if request.service_account_key and request.service_account_key.strip() else "Application Default Credentials (ADC)",
             "billing_export_configured": bool(request.billing_export_table),
             "note": "Authentication succeeded. The VM's attached service account or ADC identity must have read-only access to this project.",
         }
     except Exception as exc:
-        raise HTTPException(status_code=401, detail="GCP authentication failed. Configure Application Default Credentials on the VM and grant the attached service account read-only access.") from exc
+        raise HTTPException(status_code=401, detail="GCP authentication failed. Verify the service-account key or configure Application Default Credentials and read-only IAM access.") from exc
 
 
 @router.post("/cloud/gcp/costs")
@@ -253,7 +268,7 @@ def gcp_costs(request: GCPConnectionRequest):
         raise HTTPException(status_code=400, detail="Billing export table must be fully qualified: billing-project.dataset.table.")
     try:
         from google.cloud import bigquery
-        credentials = gcp_adc_credentials()
+        credentials = gcp_credentials(request)
         client = bigquery.Client(project=request.project_id, credentials=credentials)
         table = "`" + request.billing_export_table + "`"
         query = f"""
@@ -294,7 +309,7 @@ def gcp_costs(request: GCPConnectionRequest):
 def gcp_recommendations(request: GCPConnectionRequest):
     try:
         from google.cloud import compute_v1
-        credentials = gcp_adc_credentials()
+        credentials = gcp_credentials(request)
         client = compute_v1.InstancesClient(credentials=credentials)
         findings = []
         zones_scanned = 0
