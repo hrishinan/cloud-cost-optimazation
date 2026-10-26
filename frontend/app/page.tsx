@@ -20,7 +20,7 @@ const API = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api`;
 
 export default function Home() {
   const [provider, setProvider] = useState<Provider | null>(null);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [region, setRegion] = useState("ap-south-1");
@@ -130,8 +130,23 @@ export default function Home() {
     <main className="setup-container">
       <section className="setup-card">
         <p className="eyebrow">Cloud Cost Optimization</p>
-        <div className="steps"><span className={step === 1 ? "step active" : "step"}>1</span><span className="step-line" /><span className={step === 2 ? "step active" : "step"}>2</span></div>
-        {step === 1 ? (
+        <div className="steps"><span className={step === 0 ? "step active" : "step"}>1</span><span className="step-line" /><span className={step === 1 ? "step active" : "step"}>2</span><span className="step-line" /><span className={step === 2 ? "step active" : "step"}>3</span></div>
+        {step === 0 ? (
+          <>
+            <div className="hero-orb" aria-hidden="true"><span className="hero-orb-inner">↗</span></div>
+            <p className="hero-kicker">CLOUD SPEND, MADE CLEAR</p>
+            <h1 className="hero-title">Understand your cloud costs. <span>Optimize with confidence.</span></h1>
+            <p className="subtitle hero-subtitle">Explore your AWS and Google Cloud usage, spot potential savings, and turn cost data into clear, actionable reports — all in one place.</p>
+            <div className="hero-features">
+              <div className="hero-feature"><span className="feature-icon">⌁</span><div><strong>Cost visibility</strong><p>Review spend trends and service-level costs.</p></div></div>
+              <div className="hero-feature"><span className="feature-icon">↘</span><div><strong>Optimization insights</strong><p>Find resources and usage worth reviewing.</p></div></div>
+              <div className="hero-feature"><span className="feature-icon">▤</span><div><strong>Clear reports</strong><p>See charts, findings, and suggested next steps.</p></div></div>
+            </div>
+            <div className="hero-clouds"><span className="cloud-chip aws-chip"><span>aws</span> Amazon Web Services</span><span className="cloud-chip gcp-chip"><span>G</span> Google Cloud</span></div>
+            <button className="primary-button hero-cta" onClick={() => setStep(1)}>Get started <span aria-hidden="true">→</span></button>
+            <p className="hero-footnote">Connect a cloud account to begin your analysis. Results depend on your permissions and available billing data.</p>
+          </>
+        ) : step === 1 ? (
           <>
             <h1>Select your cloud</h1>
             <p className="subtitle">Choose the cloud provider you want to connect.</p>
@@ -144,7 +159,7 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <button className="primary-button" disabled={!provider} onClick={() => setStep(2)}>Continue</button>
+            <button className="primary-button" disabled={!provider} onClick={() => setStep(2)}>Continue to connect</button>
           </>
         ) : (
           <>
