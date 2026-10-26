@@ -19,7 +19,7 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg://cloudcost:cloudcost@postgres:5432/cloudcost
+      DATABASE_URL: "postgresql+psycopg://cloudcost:cloudcost@postgres:5432/cloudcost"
       AWS_REGION: us-east-1
       CORS_ORIGINS: "http://34.93.14.133,http://34.93.14.133:3000,https://34.93.14.133"
     ports:
@@ -31,10 +31,10 @@ services:
   frontend:
     build:
       context: ./frontend
-    args:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://34.93.14.133:8000}
+      args:
+        - NEXT_PUBLIC_API_URL=http://34.93.14.133:8000
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://34.93.14.133:8000}
+      NEXT_PUBLIC_API_URL: "http://34.93.14.133:8000"
     ports:
       - "3000:3000"
     depends_on:
